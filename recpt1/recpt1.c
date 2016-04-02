@@ -614,6 +614,8 @@ main(int argc, char **argv)
     pthread_t signal_thread;
     pthread_t reader_thread;
     pthread_t ipc_thread;
+    // MAX_QUEUE(recpt1.h:8192)サイズのキューを作成
+    // キューはスレッドで使う？
     QUEUE_T *p_queue = create_queue(MAX_QUEUE);
     BUFSZ   *bufptr;
     decoder *decoder = NULL;
@@ -670,6 +672,7 @@ main(int argc, char **argv)
     unsigned int len;
     char *channel = NULL;
 
+    // オプション引数解析
     while((result = getopt_long(argc, argv, "br:smn:ua:H:p:d:hvli:",
                                 long_options, &option_index)) != -1) {
         switch(result) {
@@ -755,6 +758,7 @@ main(int argc, char **argv)
     }
 
     if(use_http){    // http-server add-
+    // サーバーモード
         fprintf(stderr, "run as a daemon..\n");
         if(daemon(1,1)){
             perror("failed to start");
@@ -799,14 +803,19 @@ main(int argc, char **argv)
         }
         if(tdata.recsec == -1)
             tdata.indefinite = TRUE;
-    }else{    // -http-server add
+    }
+    else {    // -http-server add
+    // 通常の録画
         if(argc - optind < 3) {
+        // 3引数(channel rectime destfile)が指定されていない場合
             if(argc - optind == 2 && use_udp) {
+	    // UDPモードかつ2引数の場合はchannel rectimeをUDPでブロードキャストする
                 fprintf(stderr, "Fileless UDP broadcasting\n");
                 fileless = TRUE;
                 tdata.wfd = -1;
             }
-            else {
+	    // それ以外の場合はエラー
+	    else {
                 fprintf(stderr, "Arguments are necessary!\n");
                 fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
                 return 1;
@@ -815,27 +824,36 @@ main(int argc, char **argv)
 
         fprintf(stderr, "pid = %d\n", getpid());
 
-        /* tune */
-        if(tune(argv[optind], &tdata, device) != 0)
+        /* tune from recpt1core.c */
+	// チューナーの利用可否を調べる
+        if(tune(argv[optind]/* channel */, &tdata, device) != 0) {
+	    // チューナーが使用できない場合(具体的な理由はtuneの中でstderrに出力している
             return 1;
+	}
 
         /* set recsec */
-        if(parse_time(argv[optind + 1], &tdata.recsec) != 0) // no other thread --yaz
+	// rectimeをパースしてtdata->recsecにセット
+        if(parse_time(argv[optind + 1]/* rectime */, &tdata.recsec) != 0) { // no other thread --yaz
             return 1;
+	}
 
-        if(tdata.recsec == -1)
+        if(tdata.recsec == -1) {
+	    // rectimeが-1の場合は録画し続ける
             tdata.indefinite = TRUE;
+	}
 
         /* open output file */
-        char *destfile = argv[optind + 2];
+        char *destfile = argv[optind + 2]; /* destfile */
         if(destfile && !strcmp("-", destfile)) {
+	    // destfileが "-" の場合は標準出力にだす
             use_stdout = TRUE;
             tdata.wfd = 1; /* stdout */
         }
         else {
+	    // destfileのファイルを開く
             if(!fileless) {
                 int status;
-                char *path = strdup(argv[optind + 2]);
+                char *path = strdup(argv[optind + 2]); /* destfile */
                 char *dir = dirname(path);
                 status = mkpath(dir, 0777);
                 if(status == -1)
@@ -864,6 +882,7 @@ main(int argc, char **argv)
 
     while(1){    // http-server add-
         if(use_http){
+	    // httpサーバモード
             struct hostent *peer_host;
             struct sockaddr_in peer_sin;
 
